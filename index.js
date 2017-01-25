@@ -35,8 +35,7 @@ function send(ctx, path, opts) {
   opts = opts || {};
 
   // options
-  debug('send "%s" %j', path, opts);
-  var root = opts.root ? normalize(resolve(opts.root)) : '';
+  debug.log('going to send "%s" %j', path, opts);var root = opts.root ? normalize(resolve(opts.root)) : '';
   var trailingSlash = '/' == path[path.length - 1];
   path = path[0] == '/' ? path.slice(1) : path;
   var index = opts.index;
@@ -50,21 +49,30 @@ function send(ctx, path, opts) {
     // normalize path
     path = decode(path);
 
-    if (-1 == path) return ctx.throw('failed to decode', 400);
+    if (-1 == path) {
+      debug('failed to decode "%s"', path);
+      return ctx.throw('failed to decode', 400);
+    }
 
     // index file support
     if (index && trailingSlash) path += index;
 
     path = resolvePath(root, path);
+    debug('resolved path to "%s"', path);
 
     // hidden file support, ignore
-    if (!hidden && isHidden(root, path)) return;
+    if (!hidden && isHidden(root, path)) {
+      debug('not returning hidden file "%s"', path);
+      return;
+    }
 
     // serve gzipped file when possible
     if (encoding === 'gzip' && gzip && (yield fs.exists(path + '.gz'))) {
       path = path + '.gz';
       ctx.set('Content-Encoding', 'gzip');
       ctx.res.removeHeader('Content-Length');
+
+      debug('returning gzipped file "%s"', path);
     }
 
     // stat
@@ -84,7 +92,14 @@ function send(ctx, path, opts) {
       }
     } catch (err) {
       var notfound = ['ENOENT', 'ENAMETOOLONG', 'ENOTDIR'];
-      if (~notfound.indexOf(err.code)) return;
+
+      if (~notfound.indexOf(err.code)) {
+        debug('no file found at path "%s"', path);
+        return;
+      }
+
+      debug('error - %o', error);
+
       err.status = 500;
       throw err;
     }
@@ -95,6 +110,8 @@ function send(ctx, path, opts) {
     ctx.set('Cache-Control', 'max-age=' + (maxage / 1000 | 0));
     ctx.type = type(path);
     ctx.body = fs.createReadStream(path);
+
+    debug('file sent "%s"', path);
 
     return path;
   }
